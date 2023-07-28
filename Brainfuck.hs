@@ -18,15 +18,15 @@ data Instr
   deriving (Show, Eq)
 
 data Jump
-  = Jez Int Int
-  | Jnz Int Int
+  = Jez Int
+  | Jnz Int
   deriving (Show, Eq)
 
 data Stmt
-  = Inc Int
-  | Dec Int
-  | IncB Int
-  | DecB Int
+  = Inc
+  | Dec
+  | IncB
+  | DecB
   deriving (Show, Eq)
 
 toInstr :: Char -> Instr
@@ -58,12 +58,12 @@ toProgram is = fromRaw pairs <$> numbered
     pairs = pairJumps $ filter (\i -> snd i `elem` [JNZ, JEZ]) numbered
 
 fromRaw :: [(Int, Int)] -> (Int, Instr) -> Either Jump Stmt
-fromRaw ps (n, JEZ)  = Left (Jez n (fromJust (lookup n ps)))
-fromRaw ps (n, JNZ)  = Left (Jnz n (fromJust (lookup n ps)))
-fromRaw ps (n, INC)  = Right $ Inc n
-fromRaw ps (n, DEC)  = Right $ Dec n
-fromRaw ps (n, INCB) = Right $ IncB n
-fromRaw ps (n, DECB) = Right $ DecB n
+fromRaw ps (n, JEZ)  = Left (Jez (fromJust (lookup n ps)))
+fromRaw ps (n, JNZ)  = Left (Jnz (fromJust (lookup n ps)))
+fromRaw ps (n, INC)  = Right Inc
+fromRaw ps (n, DEC)  = Right Dec
+fromRaw ps (n, INCB) = Right IncB
+fromRaw ps (n, DECB) = Right DecB
 
 pairJumps :: [(Int, Instr)] -> [(Int, Int)]
 pairJumps js = concatMap (\((i, _), (i', _)) -> [(i, i'), (i', i)]) (go js [])
@@ -92,14 +92,14 @@ currentByte :: VM -> Int
 currentByte s = memory s !! dp s
 
 evalJump :: Jump -> VM -> VM
-evalJump (Jez _ n) s = if currentByte s == 0 then s {ip = n} else s
-evalJump (Jnz _ n) s = if currentByte s /= 0 then s {ip = n} else s
+evalJump (Jez n) s = if currentByte s == 0 then s {ip = n} else s
+evalJump (Jnz n) s = if currentByte s /= 0 then s {ip = n} else s
 
 evalStmt :: Stmt -> VM -> VM
-evalStmt (Inc _) s = s {dp = succ (dp s)}
-evalStmt (Dec _) s = s {dp = pred (dp s)}
-evalStmt (IncB _) s = s {memory = incMemory (memory s) (dp s)}
-evalStmt (DecB _) s = s {memory = decMemory (memory s) (dp s)}
+evalStmt Inc s = s {dp = succ (dp s)}
+evalStmt Dec s = s {dp = pred (dp s)}
+evalStmt IncB s = s {memory = incMemory (memory s) (dp s)}
+evalStmt DecB s = s {memory = decMemory (memory s) (dp s)}
 
 eval :: Program -> ST.State VM ()
 eval is = do
