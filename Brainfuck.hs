@@ -1,5 +1,6 @@
 module Brainfuck where
 
+import Data.Word
 import Control.Monad.State as ST
 import Data.Either
 import Data.List
@@ -72,20 +73,20 @@ pairJumps js = concatMap (\((i, _), (i', _)) -> [(i, i'), (i', i)]) (go js [])
 data VM = VM
   { dp :: Int,
     ip :: Int,
-    memory :: [Int]
+    memory :: [Word8]
   }
   deriving (Show, Eq)
 
-incMemory :: [Int] -> Int -> [Int]
+incMemory :: [Word8] -> Int -> [Word8]
 incMemory m i = take i m ++ [succ (m !! i)] ++ drop (i + 1) m
 
-decMemory :: [Int] -> Int -> [Int]
+decMemory :: [Word8] -> Int -> [Word8]
 decMemory m i = take i m ++ [pred (m !! i)] ++ drop (i + 1) m
 
 incIp :: VM -> VM
 incIp s = s {ip = succ (ip s)}
 
-currentByte :: VM -> Int
+currentByte :: VM -> Word8
 currentByte s = memory s !! dp s
 
 evalJump :: Jump -> VM -> VM
