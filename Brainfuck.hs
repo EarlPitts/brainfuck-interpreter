@@ -37,10 +37,6 @@ toInstr ']' = JNZ
 toInstr '+' = INCB
 toInstr '-' = DECB
 
-prog is = case parse p "" is of
-  Right is -> is
-  Left _ -> error "Noo"
-
 instr :: Parser Instr
 instr = toInstr <$> oneOf "><+-[]"
 
@@ -52,19 +48,20 @@ p :: Parser [Instr]
 p = spaces *> sepBy instr spaces <* spaces
 
 toProgram :: RawProgram -> Program -- Should be a (Maybe Program) (unbalanced jumps)
-toProgram is = fromRaw pairs <$> numbered 
+toProgram is = fromRaw pairs <$> numbered
   where
     numbered = zip [1 ..] is
     pairs = pairJumps $ filter (\i -> snd i `elem` [JNZ, JEZ]) numbered
 
 fromRaw :: [(Int, Int)] -> (Int, Instr) -> Either Jump Stmt
-fromRaw ps (n, JEZ)  = Left (Jez (fromJust (lookup n ps)))
-fromRaw ps (n, JNZ)  = Left (Jnz (fromJust (lookup n ps)))
-fromRaw ps (n, INC)  = Right Inc
-fromRaw ps (n, DEC)  = Right Dec
+fromRaw ps (n, JEZ) = Left (Jez (fromJust (lookup n ps)))
+fromRaw ps (n, JNZ) = Left (Jnz (fromJust (lookup n ps)))
+fromRaw ps (n, INC) = Right Inc
+fromRaw ps (n, DEC) = Right Dec
 fromRaw ps (n, INCB) = Right IncB
 fromRaw ps (n, DECB) = Right DecB
 
+-- Finds each pair of jumps and pairs them together
 pairJumps :: [(Int, Instr)] -> [(Int, Int)]
 pairJumps js = concatMap (\((i, _), (i', _)) -> [(i, i'), (i', i)]) (go js [])
   where
@@ -101,15 +98,16 @@ evalStmt Dec s = s {dp = pred (dp s)}
 evalStmt IncB s = s {memory = incMemory (memory s) (dp s)}
 evalStmt DecB s = s {memory = decMemory (memory s) (dp s)}
 
-eval :: Program -> ST.State VM ()
+eval :: Program -> ST.StateT VM IO ()
 eval is = do
   m <- get
-  if length is <= ip (trace (show m) m)
+  if length is <= ip m
     then return ()
     else do
       let i = is !! ip m
+      liftIO $ print m
       case i of
-        Left  j -> do
+        Left j -> do
           put $ incIp (evalJump j m)
           eval is
         Right s -> do
@@ -118,8 +116,8 @@ eval is = do
 
 initState = VM {dp = 0, ip = 0, memory = replicate 10 0}
 
-run :: String -> VM
-run is = execState (eval prog) initState
+run :: String -> IO VM
+run is = execStateT (eval prog) initState
   where
     prog = case parse p "" is of
       Right is -> toProgram is
