@@ -2,11 +2,13 @@ module Brainfuck where
 
 import Control.Monad.State as ST
 import Data.Either
+import Data.List
+import Data.Maybe
 import Debug.Trace
 import Text.Parsec
 import Text.Parsec.String
 
-data Stmt
+data Instr
   = JEZ
   | JNZ
   | INC
@@ -15,21 +17,60 @@ data Stmt
   | DECB
   deriving (Show, Eq)
 
-toStmt :: Char -> Stmt
-toStmt '>' = INC
-toStmt '<' = DEC
-toStmt '[' = JEZ
-toStmt ']' = JNZ
-toStmt '+' = INCB
-toStmt '-' = DECB
+data Jump
+  = Jez Int Int
+  | Jnz Int Int
+  deriving (Show, Eq)
 
-stmt :: Parser Stmt
-stmt = toStmt <$> oneOf "><+-[]"
+data Stmt
+  = Inc Int
+  | Dec Int
+  | IncB Int
+  | DecB Int
+  deriving (Show, Eq)
 
-p :: Parser [Stmt]
-p = spaces *> sepBy stmt spaces <* spaces
+toInstr :: Char -> Instr
+toInstr '>' = INC
+toInstr '<' = DEC
+toInstr '[' = JEZ
+toInstr ']' = JNZ
+toInstr '+' = INCB
+toInstr '-' = DECB
 
-type Program = [Stmt]
+prog is = case parse p "" is of
+  Right is -> is
+  Left _ -> error "Noo"
+
+instr :: Parser Instr
+instr = toInstr <$> oneOf "><+-[]"
+
+type RawProgram = [Instr]
+
+type Program = [Either Jump Stmt]
+
+p :: Parser [Instr]
+p = spaces *> sepBy instr spaces <* spaces
+
+toProgram :: RawProgram -> Program -- Should be a (Maybe Program) (unbalanced jumps)
+toProgram is = fromRaw pairs <$> numbered 
+  where
+    numbered = zip [1 ..] is
+    pairs = pairJumps $ filter (\i -> snd i `elem` [JNZ, JEZ]) numbered
+
+fromRaw :: [(Int, Int)] -> (Int, Instr) -> Either Jump Stmt
+fromRaw ps (n, JEZ)  = Left (Jez n (fromJust (lookup n ps)))
+fromRaw ps (n, JNZ)  = Left (Jnz n (fromJust (lookup n ps)))
+fromRaw ps (n, INC)  = Right $ Inc n
+fromRaw ps (n, DEC)  = Right $ Dec n
+fromRaw ps (n, INCB) = Right $ IncB n
+fromRaw ps (n, DECB) = Right $ DecB n
+
+pairJumps :: [(Int, Instr)] -> [(Int, Int)]
+pairJumps js = concatMap (\((i, _), (i', _)) -> [(i, i'), (i', i)]) (go js [])
+  where
+    go [] s = []
+    go (j : js) [] = go js [j]
+    go (j : js) s@(j' : js') = if snd j == snd j' then go js (j : s) else (j, j') : go js js'
 
 data VM = VM
   { dp :: Int,
@@ -50,41 +91,15 @@ incIp s = s {ip = succ (ip s)}
 currentByte :: VM -> Int
 currentByte s = memory s !! dp s
 
-evalStep :: Stmt -> VM -> Program -> VM
-evalStep INC s _ = s {dp = succ (dp s)}
-evalStep DEC s _ = s {dp = pred (dp s)}
-evalStep INCB s _ = s {memory = incMemory (memory s) (dp s)}
-evalStep DECB s _ = s {memory = decMemory (memory s) (dp s)}
-evalStep JEZ s p = if currentByte s == 0 then s { ip = jumpForward p (ip s) } else s
-evalStep JNZ s p = if currentByte s /= 0 then s { ip = jumpBackward p (ip s) } else s
+evalJump :: Jump -> VM -> VM
+evalJump (Jez _ n) s = if currentByte s == 0 then s {ip = n} else s
+evalJump (Jnz _ n) s = if currentByte s /= 0 then s {ip = n} else s
 
-jumpBackward :: Program -> Int -> Int
-jumpBackward p i = evalState (go p (i - 1)) 0
-  where
-    go p i = do
-      case p !! i of
-        JEZ -> do
-          n <- get
-          if n == 0 then return i else put (n - 1) >> go p (i - 1)
-        JNZ -> do
-          n <- get
-          put (n + 1)
-          go p (i - 1)
-        _ -> go p (i - 1)
-
-jumpForward :: Program -> Int -> Int
-jumpForward p i = evalState (go p (i + 1)) 0
-  where
-    go p i = do
-      case p !! i of
-        JNZ -> do
-          n <- get
-          if n == 0 then return i else put (n - 1) >> go p (i + 1)
-        JEZ -> do
-          n <- get
-          put (n + 1)
-          go p (i + 1)
-        _ -> go p (i + 1)
+evalStmt :: Stmt -> VM -> VM
+evalStmt (Inc _) s = s {dp = succ (dp s)}
+evalStmt (Dec _) s = s {dp = pred (dp s)}
+evalStmt (IncB _) s = s {memory = incMemory (memory s) (dp s)}
+evalStmt (DecB _) s = s {memory = decMemory (memory s) (dp s)}
 
 eval :: Program -> ST.State VM ()
 eval is = do
@@ -93,14 +108,19 @@ eval is = do
     then return ()
     else do
       let i = is !! ip m
-      put $ incIp (evalStep i m is)
-      eval is
+      case i of
+        Left  j -> do
+          put $ incIp (evalJump j m)
+          eval is
+        Right s -> do
+          put $ incIp (evalStmt s m)
+          eval is
 
 initState = VM {dp = 0, ip = 0, memory = replicate 10 0}
 
 run :: String -> VM
 run is = execState (eval prog) initState
-  where prog = case parse p "" is of
-                  Right is -> is
-                  Left _ -> error "Noo"
-  
+  where
+    prog = case parse p "" is of
+      Right is -> toProgram is
+      Left _ -> error "Noo"
