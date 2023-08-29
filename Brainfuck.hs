@@ -1,16 +1,16 @@
 module Brainfuck where
 
 import Control.Monad.State as ST
+import Data.ByteString.Internal
 import Data.Either
 import Data.List
-import Data.ByteString.Internal
 import Data.Maybe
 import Data.Word
 import Debug.Trace
+import System.Environment
+import System.IO
 import Text.Parsec
 import Text.Parsec.String
-import System.IO
-import System.Environment
 
 data Token
   = JEZ
@@ -73,14 +73,14 @@ toProgram is = fromRaw pairs <$> numbered
     pairs = pairJumps $ filter (\i -> snd i `elem` [JNZ, JEZ]) numbered
 
 fromRaw :: [(Int, Int)] -> (Int, Token) -> Instr
-fromRaw ps (n, JEZ)  = Jump (Jez (fromJust (lookup n ps)))
-fromRaw ps (n, JNZ)  = Jump (Jnz (fromJust (lookup n ps)))
-fromRaw ps (n, INC)  = Stmt Inc
-fromRaw ps (n, DEC)  = Stmt Dec
+fromRaw ps (n, JEZ) = Jump (Jez (fromJust (lookup n ps)))
+fromRaw ps (n, JNZ) = Jump (Jnz (fromJust (lookup n ps)))
+fromRaw ps (n, INC) = Stmt Inc
+fromRaw ps (n, DEC) = Stmt Dec
 fromRaw ps (n, INCB) = Stmt IncB
 fromRaw ps (n, DECB) = Stmt DecB
-fromRaw ps (n, IN)   = IOStmt In
-fromRaw ps (n, OUT)  = IOStmt Out
+fromRaw ps (n, IN) = IOStmt In
+fromRaw ps (n, OUT) = IOStmt Out
 
 -- Finds each pair of jumps and pairs them together
 pairJumps :: [(Int, Token)] -> [(Int, Int)]
@@ -113,8 +113,8 @@ currentByte :: VM -> Word8
 currentByte s = memory s !! dp s
 
 evalJump :: Jump -> VM -> VM
-evalJump (Jez n) s = if currentByte s == 0 then s {ip = n} else s
-evalJump (Jnz n) s = if currentByte s /= 0 then s {ip = n} else s
+evalJump (Jez n) s = if currentByte s == 0 then s {ip = n - 1} else s
+evalJump (Jnz n) s = if currentByte s /= 0 then s {ip = n - 1} else s
 
 evalStmt :: Stmt -> VM -> VM
 evalStmt Inc s = s {dp = succ (dp s)}
@@ -125,7 +125,7 @@ evalStmt DecB s = s {memory = decMemory (memory s) (dp s)}
 evalIOStmt :: IOStmt -> VM -> IO VM
 evalIOStmt In s = do
   input <- getChar
-  let n = c2w input 
+  let n = c2w input
   return $ s {memory = modMemory (memory s) (dp s) n}
 evalIOStmt Out s = do
   let n = w2c $ currentByte s
@@ -139,7 +139,7 @@ eval is = do
     then return ()
     else do
       let i = is !! ip m
-      liftIO $ print m
+      -- liftIO $ print m
       case i of
         Jump j -> do
           put $ incIp (evalJump j m)
@@ -152,7 +152,7 @@ eval is = do
           put $ incIp newState
           eval is
 
-initState = VM {dp = 0, ip = 0, memory = replicate 100 0}
+initState = VM {dp = 0, ip = 0, memory = replicate 10 0}
 
 run :: String -> IO VM
 run is = execStateT (eval prog) initState
@@ -165,5 +165,5 @@ main :: IO VM
 main = do
   args <- getArgs
   source <- readFile (head args)
-  print source
+  -- print source
   run source
