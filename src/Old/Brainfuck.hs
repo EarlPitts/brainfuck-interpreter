@@ -1,4 +1,4 @@
-module Brainfuck where
+module Old.Brainfuck where
 
 import Control.Monad.State as ST
 import Data.ByteString.Internal
