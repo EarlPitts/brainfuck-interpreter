@@ -2,7 +2,13 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module BrainFuck (VM (..), eval, exec, parse) where
+module BrainFuck (
+  VM (..),
+  Cell (..),
+  eval,
+  exec,
+  parse,
+) where
 
 import Control.Monad
 import Control.Monad.State
