@@ -5,6 +5,7 @@
 module BrainFuck (
   VM (..),
   Cell (..),
+  Instr,
   eval,
   exec,
   parse,
