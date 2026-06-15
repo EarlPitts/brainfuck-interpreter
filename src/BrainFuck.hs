@@ -64,7 +64,7 @@ parse = mapMaybe token
 eval :: Input -> Program -> String
 eval input p = C8.unpack (BS.pack (reverse vm.output))
  where
-  tape = empty
+  tape = fromList [Cell 0]
   program = fromList p
   output = []
   vm = execState run VM{..}
