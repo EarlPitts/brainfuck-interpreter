@@ -2,11 +2,8 @@
 
 module Main (main) where
 
-import BrainFuck (eval, parse)
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as C8
+import BrainFuck
 import Data.Char
-import Data.Word (Word8)
 import Test.Hspec
 import Test.Hspec.QuickCheck
 
@@ -23,44 +20,36 @@ main = do
       prop "should reverse input" do
         testReverse . filter isAscii . filter (/= '\NUL')
 
-eof :: [Word8]
-eof = [0]
-
 testHelloWorld :: IO ()
 testHelloWorld = do
-  file <- readFile "test/programs/helloworld.bf"
-  let program = parse file
-      input = []
+  program <- readFile "test/programs/helloworld.bf"
+  let input = ""
 
-  let output = eval input program
+  let output = evalWith program input 
 
   output `shouldBe` "Hello World!\n"
 
 testAirthmetics :: IO ()
 testAirthmetics = do
-  file <- readFile "test/programs/arith.bf"
-  let program = parse file
-      input = []
+  program <- readFile "test/programs/arith.bf"
+  let input = ""
 
-  let output = eval input program
+  let output = evalWith program input 
 
   output `shouldBe` "7"
 
 testInput :: String -> IO ()
 testInput input = do
-  let program = parse $ concat $ replicate (length input) ",."
-      input' = BS.unpack (C8.pack input)
+  let program = concat $ replicate (length input) ",."
 
-  let output = eval input' program
+  let output = evalWith program input 
 
   output `shouldBe` input
 
 testReverse :: String -> IO ()
 testReverse input = do
-  file <- readFile "test/programs/reverse.bf"
-  let program = parse file
-      input' = BS.unpack (C8.pack input)
+  program <- readFile "test/programs/reverse.bf"
 
-  let output = eval (input' <> eof) program
+  let output = evalWith program (input <> ['\NUL'])
 
   output `shouldBe` reverse input

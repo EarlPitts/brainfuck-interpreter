@@ -104,12 +104,12 @@ evalWith :: String -> String -> String
 evalWith program input =
   fromWords (reverse vm.output)
     where
-      vm = execState run (mkVM program input)
+      vm = exec (mkVM program input)
 
 eval :: VM -> String
 eval vm = fromWords (reverse endState.output)
   where
-    endState = execState run vm
+    endState = exec vm
 
 exec :: VM -> VM
 exec = execState run
