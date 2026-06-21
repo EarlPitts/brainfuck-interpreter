@@ -6,8 +6,14 @@ module BrainFuck (
   VM (..),
   Cell (..),
   Instr,
+  mkVM,
   eval,
+  evalWith,
   exec,
+  execWith,
+  execStep,
+  toWords,
+  fromWords,
   parse,
 ) where
 
@@ -15,6 +21,7 @@ import Control.Monad
 import Control.Monad.State
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
+import Data.List (uncons)
 import Data.List.Zipper
 import Data.List.Zipper.Extended
 import Data.Maybe
@@ -29,11 +36,9 @@ data Instr
   | Out
   | JumpForward
   | JumpBack
-  deriving (Show, Eq)
+  deriving (Eq)
 
 type Program = [Instr]
-
-type Input = [Word8]
 
 newtype Cell = Cell {unCell :: Word8} deriving (Eq, Enum, Num)
 
@@ -45,6 +50,16 @@ instance Semigroup Cell where
 
 instance Monoid Cell where
   mempty = Cell 0
+
+instance Show Instr where
+  show Incr = "+"
+  show Decr = "-"
+  show Backward = "<"
+  show Forward = ">"
+  show In = ","
+  show Out = "."
+  show JumpForward = "["
+  show JumpBack = "]"
 
 data VM = VM
   { tape :: Zipper Cell
@@ -68,25 +83,46 @@ token _ = Nothing
 parse :: String -> Program
 parse = mapMaybe token
 
-eval :: Input -> Program -> String
-eval input p = C8.unpack (BS.pack (reverse vm.output))
- where
-  tape = fromList [Cell 0]
-  program = fromList p
-  output = []
-  vm = execState run VM{..}
+toWords :: String -> [Word8]
+toWords = BS.unpack . C8.pack
 
-exec :: Input -> Program -> VM
-exec input p =
-  let
-    tape = fromList [Cell 0]
-    program = fromList p
+fromWords :: [Word8] -> String
+fromWords = C8.unpack . BS.pack
+
+initTape :: Zipper Cell
+initTape = fromList [Cell 0]
+
+mkVM :: String -> String -> VM
+mkVM programStr inputStr = let
+    tape = initTape 
     output = []
-   in
-    execState run VM{..}
+    program = fromList $ parse programStr
+    input = toWords inputStr
+  in VM {..}
 
-run :: State VM ()
-run = do
+evalWith :: String -> String -> String
+evalWith program input =
+  fromWords (reverse vm.output)
+    where
+      vm = execState run (mkVM program input)
+
+eval :: VM -> String
+eval vm = fromWords (reverse endState.output)
+  where
+    endState = execState run vm
+
+exec :: VM -> VM
+exec = execState run
+
+execStep :: VM -> VM
+execStep = execState step
+
+execWith :: String -> String -> VM
+execWith program input =
+    execState run (mkVM program input)
+
+step :: State VM ()
+step = do
   vm@VM{..} <- get
   unless (endp program) $ do
     let instr = cursor program
@@ -97,10 +133,17 @@ run = do
       Backward -> put vm{tape = left tape}
       JumpForward -> when (cursor tape == 0) $ put vm{program = jumpForward (right program)}
       JumpBack -> when (cursor tape /= 0) $ put vm{program = jumpBack (left program)}
-      In -> put vm{tape = replaceWith (const $ Cell (head input)) tape, input = tail input}
+      In -> case uncons input of
+        Nothing -> put vm{tape = replaceWith (const $ Cell 0) tape, input = []}
+        Just (w,ws) -> put vm{tape = replaceWith (const $ Cell w) tape, input = ws}
       Out -> put vm{output = unCell (cursor tape) : output}
     proceed
-    run
+
+run :: State VM ()
+run = do
+  prog <- gets program
+  unless (endp prog)
+    (step >> run)
 
 proceed :: State VM ()
 proceed = modify (\vm -> vm{program = right vm.program})
